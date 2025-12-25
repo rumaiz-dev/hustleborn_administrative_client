@@ -1,6 +1,8 @@
 'use client';
 
 import type { User } from '@/types/user';
+import type { LoginRequest, ApiResponse } from '@/types/auth';
+import { config } from '@/config';
 
 function generateToken(): string {
   const arr = new Uint8Array(12);
@@ -28,7 +30,7 @@ export interface SignInWithOAuthParams {
 }
 
 export interface SignInWithPasswordParams {
-  email: string;
+  username: string;
   password: string;
 }
 
@@ -52,19 +54,36 @@ class AuthClient {
   }
 
   async signInWithPassword(params: SignInWithPasswordParams): Promise<{ error?: string }> {
-    const { email, password } = params;
+    const { username, password } = params;
 
-    // Make API request
+    try {
+      const response = await fetch(`${config.api.baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password } as LoginRequest),
+      });
 
-    // We do not handle the API, so we'll check if the credentials match with the hardcoded ones.
-    if (email !== 'sofia@devias.io' || password !== 'Secret1') {
-      return { error: 'Invalid credentials' };
+      if (!response.ok) {
+        return { error: 'Login failed' };
+      }
+
+      const apiResponse: ApiResponse = await response.json();
+
+      if (!apiResponse.success) {
+        return { error: apiResponse.message || 'Login failed' };
+      }
+
+      if (apiResponse.data?.token) {
+        localStorage.setItem('custom-auth-token', apiResponse.data.token);
+      }
+
+      return {};
+    } catch (error) {
+      console.error('Login error:', error);
+      return { error: 'Network error' };
     }
-
-    const token = generateToken();
-    localStorage.setItem('custom-auth-token', token);
-
-    return {};
   }
 
   async resetPassword(_: ResetPasswordParams): Promise<{ error?: string }> {
