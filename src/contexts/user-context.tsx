@@ -1,8 +1,10 @@
 'use client';
 
 import * as React from 'react';
+import { useSelector } from 'react-redux';
 
 import type { User } from '@/types/user';
+import type { RootState } from '@/store';
 import { authClient } from '@/lib/auth/client';
 import { logger } from '@/lib/default-logger';
 
@@ -20,38 +22,19 @@ export interface UserProviderProps {
 }
 
 export function UserProvider({ children }: UserProviderProps): React.JSX.Element {
-  const [state, setState] = React.useState<{ user: User | null; error: string | null; isLoading: boolean }>({
-    user: null,
-    error: null,
-    isLoading: true,
-  });
+  const user = useSelector((state: RootState) => state.auth.user);
+  const error = useSelector((state: RootState) => state.auth.error);
+  const isLoading = useSelector((state: RootState) => state.auth.isLoading);
 
   const checkSession = React.useCallback(async (): Promise<void> => {
     try {
-      const { data, error } = await authClient.getUser();
-
-      if (error) {
-        logger.error(error);
-        setState((prev) => ({ ...prev, user: null, error: 'Something went wrong', isLoading: false }));
-        return;
-      }
-
-      setState((prev) => ({ ...prev, user: data ?? null, error: null, isLoading: false }));
+      await authClient.getUser();
     } catch (error) {
       logger.error(error);
-      setState((prev) => ({ ...prev, user: null, error: 'Something went wrong', isLoading: false }));
     }
   }, []);
 
-  React.useEffect(() => {
-    checkSession().catch((error) => {
-      logger.error(error);
-      // noop
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Expected
-  }, []);
-
-  return <UserContext.Provider value={{ ...state, checkSession }}>{children}</UserContext.Provider>;
+  return <UserContext.Provider value={{ user, error, isLoading, checkSession }}>{children}</UserContext.Provider>;
 }
 
 export const UserConsumer = UserContext.Consumer;

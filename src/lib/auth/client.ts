@@ -3,6 +3,8 @@
 import type { User } from '@/types/user';
 import type { LoginRequest, ApiResponse } from '@/types/auth';
 import { config } from '@/config';
+import { store } from '@/store';
+import { loginStart, loginSuccess, loginFailure, logout, setUser } from '@/store/authSlice';
 
 function generateToken(): string {
   const arr = new Uint8Array(12);
@@ -56,6 +58,8 @@ class AuthClient {
   async signInWithPassword(params: SignInWithPasswordParams): Promise<{ error?: string }> {
     const { username, password } = params;
 
+    store.dispatch(loginStart());
+
     try {
       const response = await fetch(`${config.api.baseUrl}/api/auth/login`, {
         method: 'POST',
@@ -66,23 +70,29 @@ class AuthClient {
       });
 
       if (!response.ok) {
-        return { error: 'Login failed' };
+        const error = 'Login failed';
+        store.dispatch(loginFailure(error));
+        return { error };
       }
 
       const apiResponse: ApiResponse = await response.json();
 
       if (!apiResponse.success) {
-        return { error: apiResponse.message || 'Login failed' };
+        const error = apiResponse.message || 'Login failed';
+        store.dispatch(loginFailure(error));
+        return { error };
       }
 
       if (apiResponse.data?.token) {
-        localStorage.setItem('custom-auth-token', apiResponse.data.token);
+        store.dispatch(loginSuccess({ user: user, token: apiResponse.data.token }));
       }
 
       return {};
     } catch (error) {
       console.error('Login error:', error);
-      return { error: 'Network error' };
+      const errorMessage = 'Network error';
+      store.dispatch(loginFailure(errorMessage));
+      return { error: errorMessage };
     }
   }
 
@@ -95,20 +105,27 @@ class AuthClient {
   }
 
   async getUser(): Promise<{ data?: User | null; error?: string }> {
-    // Make API request
+    // Check Redux state first
+    const state = store.getState();
+    if (state.auth.user) {
+      return { data: state.auth.user };
+    }
 
-    // We do not handle the API, so just check if we have a token in localStorage.
+    // Check token in localStorage (for initial load)
     const token = localStorage.getItem('custom-auth-token');
 
     if (!token) {
+      store.dispatch(setUser(null));
       return { data: null };
     }
 
+    // For now, set the hardcoded user if token exists
+    store.dispatch(setUser(user));
     return { data: user };
   }
 
   async signOut(): Promise<{ error?: string }> {
-    localStorage.removeItem('custom-auth-token');
+    store.dispatch(logout());
 
     return {};
   }
